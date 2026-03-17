@@ -1,0 +1,14 @@
+[package]
+name = "wallpaper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.102"
+gpui = "0.2.2"
+log = "0.4"
+reqwest_client = "0.1.14"
+# smallvec is included here for convenience, it is used by gpui when creating
+# components that can have children. uncomment this line or
+# use `cargo add smallvec` to add it to your project
+#smallvec = "1.13.2"
