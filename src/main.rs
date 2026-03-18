@@ -1,4 +1,5 @@
 use gpui::*;
+use std::{path, process::Command};
 
 pub struct Assets;
 
@@ -28,72 +29,116 @@ impl AssetSource for Assets {
                 paths.push(SharedString::from(name_str.to_string()));
             }
         }
+
         Ok(paths)
     }
 }
 
-struct Wallpaper {
-    source: ImageSource,
-    selected: &mut bool,
+struct WallpaperGallery {
+    base_url: SharedString,
+    sources: Vec<ImageSource>,
 }
 
-impl Render for Wallpaper {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+impl WallpaperGallery {
+    fn render_wallpaper_item(
+        &self,
+        source: ImageSource,
+        base_url: SharedString,
+        _cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let my_source = source.clone();
+
         div()
-            .flex()
-            .size_full()
-            .w_96()
-            .justify_center()
-            .child(self.render_wallpaper_item())
-            .on_mouse_down(
-                MouseButton::Left,
-                _cx.listener(|view, _event, cx| {
-                    view.selected = !view.selected;
-
-                    // This is the magic line that makes the width change happen!
-                    cx.notify();
-
-                    println!("Clicked! Selected is now {}", view.selected);
-                }),
-            )
-    }
-}
-
-impl Wallpaper {
-    fn render_wallpaper_item(&self) -> impl IntoElement {
-        div()
-            .h_full()
+            .h_1_2()
             .w(px(100.0))
             .bg(rgb(0x1e1e1e))
             .overflow_hidden()
             .rounded_lg()
+            .hover(|this| this.cursor_pointer().border_4().border_color(rgb(0xe0e0e0)))
+            .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
+                set_wallpaper(my_source.clone(), base_url.clone());
+            })
             .child(
-                img(self.source.clone())
+                img(source.clone())
                     .size_full()
-                    // CRITICAL: This crops the image instead of stretching it
-                    .object_fit(ObjectFit::Cover),
+                    .object_fit(ObjectFit::Cover)
+                    .rounded_lg()
+                    .overflow_hidden(),
             )
     }
 }
 
+impl Render for WallpaperGallery {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .size_full()
+            .gap_4()
+            .p_4()
+            .justify_center()
+            .items_center()
+            // Map every source in our list to a UI element
+            .children(self.sources.iter().map(|source| {
+                self.render_wallpaper_item(source.clone(), self.base_url.clone(), _cx)
+            }))
+    }
+}
+
+fn set_wallpaper(source: ImageSource, base_url: SharedString) {
+    let path_str: Option<SharedString> = match source {
+        ImageSource::Resource(res) => match res {
+            Resource::Embedded(s) => Some(s),
+            // If Resource has a Path/File variant, handle it here:
+            Resource::Path(p) => Some(p.to_string_lossy().to_string().into()),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    if let Some(path) = path_str {
+        let complete_path = format!("{}{}", base_url, path);
+        let _ = Command::new("sh")
+            .arg("-c")
+            .arg(format!(" plasma-apply-wallpaperimage {}", complete_path))
+            .spawn();
+    } else {
+        eprintln!("Source is a memory buffer or closure; no path available.");
+    }
+}
+
+actions!(window, [Quit]);
+
 fn main() {
     Application::new().with_assets(Assets).run(|cx: &mut App| {
+        let bounds = Bounds::centered(None, size(px(1920.0), px(1080.0)), cx);
         let options = WindowOptions {
             titlebar: Some(TitlebarOptions {
                 traffic_light_position: None,
                 title: None,
                 appears_transparent: true,
             }),
+            window_bounds: Some(WindowBounds::Fullscreen(bounds)),
+            kind: WindowKind::PopUp,
             window_background: WindowBackgroundAppearance::Transparent,
             ..Default::default()
         };
 
+        let asset_paths = cx.asset_source().list("wallpapers").unwrap_or_default();
+        let sources: Vec<ImageSource> = asset_paths
+            .into_iter()
+            .map(|path| format!("wallpapers/{}", path).into())
+            .collect();
+
         cx.open_window(options, |_, cx| {
-            cx.new(|_cx| Wallpaper {
-                source: "wallpapers/test.jpg".into(),
-                selected: false,
+            cx.new(|_cx| WallpaperGallery {
+                base_url: "/home/bengregory/Documents/programming/wallpaper/assets/".into(),
+                sources: sources,
             })
         })
         .unwrap();
+
+        cx.activate(true);
+        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
     });
 }
