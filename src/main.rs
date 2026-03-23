@@ -1,90 +1,109 @@
 use gpui::*;
-use std::{path, process::Command};
+mod image_compressor;
 
-pub struct Assets;
+use std::path::PathBuf;
+use std::{process::Command, time::Duration, time::Instant};
 
-impl AssetSource for Assets {
-    fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
-        // This is a simple implementation that reads from the local 'assets' folder
-        let full_path = std::path::Path::new("assets").join(path);
-        if full_path.exists() {
-            let bytes = std::fs::read(full_path)?;
-            Ok(Some(std::borrow::Cow::Owned(bytes)))
-        } else {
-            Ok(None)
-        }
-    }
+use crate::image_compressor::compress_directory;
 
-    fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        let mut paths = Vec::new();
-        let dir_path = std::path::Path::new("assets").join(path);
+struct Wallpaper {
+    id: i32,
+    default: ImageSource,
+    compressed: ImageSource,
+}
 
-        for entry in std::fs::read_dir(dir_path)? {
-            let entry = entry?;
-            // 1. Get the OsString
-            let file_name = entry.file_name();
-
-            // 2. Convert it to a String (owned), then to SharedString
-            if let Some(name_str) = file_name.to_str() {
-                paths.push(SharedString::from(name_str.to_string()));
-            }
-        }
-
-        Ok(paths)
-    }
+pub struct WallpaperModel {
+    sources: Vec<Wallpaper>,
+    selected: Option<i32>,
 }
 
 struct WallpaperGallery {
-    base_url: SharedString,
-    sources: Vec<ImageSource>,
-}
-
-impl WallpaperGallery {
-    fn render_wallpaper_item(
-        &self,
-        source: ImageSource,
-        base_url: SharedString,
-        _cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let my_source = source.clone();
-
-        div()
-            .h_1_2()
-            .w(px(100.0))
-            .bg(rgb(0x1e1e1e))
-            .overflow_hidden()
-            .rounded_lg()
-            .hover(|this| this.cursor_pointer().border_4().border_color(rgb(0xe0e0e0)))
-            .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
-                set_wallpaper(my_source.clone(), base_url.clone());
-            })
-            .child(
-                img(source.clone())
-                    .size_full()
-                    .object_fit(ObjectFit::Cover)
-                    .rounded_lg()
-                    .overflow_hidden(),
-            )
-    }
+    model: Entity<WallpaperModel>,
 }
 
 impl Render for WallpaperGallery {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let model = self.model.clone();
+        let model_data = self.model.read(cx);
+        let current_selected = model_data.selected.clone();
+
         div()
+            .id("wallpaper-scroll-container")
             .flex()
+            .bg(hsla(175.0, 0.0, 0.0, 0.45))
+            .overflow_x_scroll()
             .size_full()
             .gap_4()
             .p_4()
-            .justify_center()
             .items_center()
-            // Map every source in our list to a UI element
-            .children(self.sources.iter().map(|source| {
-                self.render_wallpaper_item(source.clone(), self.base_url.clone(), _cx)
+            .children(model_data.sources.iter().map(|s| {
+                let is_active = current_selected.is_some() && current_selected.unwrap().eq(&s.id);
+                wallpaper_item(s, is_active, model.clone())
             }))
     }
 }
 
-fn set_wallpaper(source: ImageSource, base_url: SharedString) {
+fn wallpaper_item(
+    wallpaper: &Wallpaper,
+    is_active: bool,
+    model: Entity<WallpaperModel>,
+) -> impl IntoElement {
+    let default = wallpaper.default.clone();
+    let compressed = wallpaper.compressed.clone();
+    let id = wallpaper.id.clone();
+
+    // Widths
+    let collapsed_width = 100.0;
+    let expanded_width = 400.0;
+
+    let target_width = if is_active {
+        expanded_width
+    } else {
+        collapsed_width
+    };
+
+    let container = div()
+        .h(px(300.0))
+        .w(px(target_width))
+        .flex_none()
+        .bg(rgb(0x1e1e1e))
+        .border_2()
+        .border_color(hsla(0.0, 0.0, 0.0, 0.0))
+        .hover(|style| {
+            style
+                .cursor_pointer()
+                .size_full()
+                .border_4()
+                .border_color(rgb(0xe0e0e0))
+        })
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            model.update(cx, |state, _cx| {
+                state.selected = Some(id);
+            });
+            set_wallpaper(default.clone());
+        })
+        .child(img(compressed).size_full().object_fit(ObjectFit::Cover))
+        .overflow_hidden();
+
+    if is_active {
+        let anim_id: SharedString = format!("grow_{}", wallpaper.id).into();
+        container
+            .with_animation(
+                anim_id,
+                Animation::new(Duration::from_millis(200)).with_easing(ease_in_out),
+                move |this, delta| {
+                    let current_width =
+                        collapsed_width + (expanded_width - collapsed_width) * delta;
+                    this.w(px(current_width))
+                },
+            )
+            .into_any_element()
+    } else {
+        container.w(px(collapsed_width)).into_any_element()
+    }
+}
+
+fn set_wallpaper(source: ImageSource) {
     let path_str: Option<SharedString> = match source {
         ImageSource::Resource(res) => match res {
             Resource::Embedded(s) => Some(s),
@@ -96,7 +115,7 @@ fn set_wallpaper(source: ImageSource, base_url: SharedString) {
     };
 
     if let Some(path) = path_str {
-        let complete_path = format!("{}{}", base_url, path);
+        let complete_path = format!("{}", path);
         let _ = Command::new("sh")
             .arg("-c")
             .arg(format!(" plasma-apply-wallpaperimage {}", complete_path))
@@ -106,10 +125,38 @@ fn set_wallpaper(source: ImageSource, base_url: SharedString) {
     }
 }
 
+fn load_wallpaper_paths(base_url: &std::path::Path) -> Result<Vec<SharedString>> {
+    let mut paths = Vec::new();
+    let dir_path = std::path::Path::new(&base_url);
+
+    for entry in std::fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let file_name = entry.file_name();
+
+        if let Some(name_str) = file_name.to_str() {
+            paths.push(SharedString::from(name_str.to_string()));
+        }
+    }
+
+    Ok(paths)
+}
+
 actions!(window, [Quit]);
 
 fn main() {
-    Application::new().with_assets(Assets).run(|cx: &mut App| {
+    let base_directory = "/home/bengregory/Documents/programming/wallpaper/assets/wallpapers/";
+
+    // compress images if no images compressed
+    let compressed_dir = std::path::Path::new(&base_directory).join("compressed");
+    if !compressed_dir.exists() {
+        let before = Instant::now();
+        let _ = compress_directory(&base_directory);
+        let after = Instant::now();
+        println!("{:?}", after.duration_since(before));
+    }
+
+    Application::new().run(move |cx: &mut App| {
+        gpui_component::init(cx);
         let bounds = Bounds::centered(None, size(px(1920.0), px(1080.0)), cx);
         let options = WindowOptions {
             titlebar: Some(TitlebarOptions {
@@ -123,22 +170,35 @@ fn main() {
             ..Default::default()
         };
 
-        let asset_paths = cx.asset_source().list("wallpapers").unwrap_or_default();
-        let sources: Vec<ImageSource> = asset_paths
+        let asset_paths = load_wallpaper_paths(&compressed_dir).unwrap();
+        let mut index = 0;
+        let wallpapers: Vec<Wallpaper> = asset_paths
             .into_iter()
-            .map(|path| format!("wallpapers/{}", path).into())
+            .map(|a| {
+                index = index + 1;
+                Wallpaper {
+                    id: index.clone(),
+                    default: PathBuf::from(base_directory).join(&a.as_str()).into(),
+                    compressed: PathBuf::from(&compressed_dir).join(&a.as_str()).into(),
+                }
+            })
             .collect();
 
-        cx.open_window(options, |_, cx| {
-            cx.new(|_cx| WallpaperGallery {
-                base_url: "/home/bengregory/Documents/programming/wallpaper/assets/".into(),
-                sources: sources,
+        let wallpaper_model = cx.new(|_cx| WallpaperModel {
+            sources: wallpapers,
+            selected: Option::None,
+        });
+
+        let _ = cx
+            .open_window(options, |_, cx| {
+                cx.new(|_cx| WallpaperGallery {
+                    model: wallpaper_model.clone(),
+                })
             })
-        })
-        .unwrap();
+            .expect("Failed to open window");
 
         cx.activate(true);
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        cx.bind_keys([KeyBinding::new("ctrl-q", Quit, None)]);
     });
 }
