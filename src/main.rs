@@ -1,10 +1,10 @@
 use gpui::*;
-mod image_compressor;
-
-use std::path::PathBuf;
-use std::{process::Command, time::Duration, time::Instant};
+use gpui_component::kbd::Kbd;
 
 use crate::image_compressor::compress_directory;
+use std::path::PathBuf;
+use std::{process::Command, time::Duration, time::Instant};
+mod image_compressor;
 
 struct Wallpaper {
     id: i32,
@@ -28,18 +28,26 @@ impl Render for WallpaperGallery {
         let current_selected = model_data.selected.clone();
 
         div()
-            .id("wallpaper-scroll-container")
-            .flex()
-            .bg(hsla(175.0, 0.0, 0.0, 0.45))
-            .overflow_x_scroll()
             .size_full()
-            .gap_4()
-            .p_4()
-            .items_center()
-            .children(model_data.sources.iter().map(|s| {
-                let is_active = current_selected.is_some() && current_selected.unwrap().eq(&s.id);
-                wallpaper_item(s, is_active, model.clone())
-            }))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .bg(hsla(175.0, 0.0, 0.0, 0.45))
+            .child(
+                div()
+                    .id("wallpaper-scroll-container")
+                    .flex()
+                    .overflow_x_scroll()
+                    // .size_full()
+                    .gap_4()
+                    .p_4()
+                    .items_center()
+                    .children(model_data.sources.iter().map(|s| {
+                        let is_active =
+                            current_selected.is_some() && current_selected.unwrap().eq(&s.id);
+                        wallpaper_item(s, is_active, model.clone())
+                    })),
+            )
     }
 }
 
@@ -54,7 +62,7 @@ fn wallpaper_item(
 
     // Widths
     let collapsed_width = 100.0;
-    let expanded_width = 400.0;
+    let expanded_width = 450.0;
 
     let target_width = if is_active {
         expanded_width
@@ -63,18 +71,18 @@ fn wallpaper_item(
     };
 
     let container = div()
-        .h(px(300.0))
+        .h(px(350.0))
         .w(px(target_width))
         .flex_none()
         .bg(rgb(0x1e1e1e))
-        .border_2()
-        .border_color(hsla(0.0, 0.0, 0.0, 0.0))
+        .border_3()
+        .border_color(rgb(0x000500))
         .hover(|style| {
             style
                 .cursor_pointer()
                 .size_full()
                 .border_4()
-                .border_color(rgb(0xe0e0e0))
+                .border_color(rgb(0xf6e8ea))
         })
         .on_mouse_down(MouseButton::Left, move |_, _, cx| {
             model.update(cx, |state, _cx| {
@@ -101,6 +109,10 @@ fn wallpaper_item(
     } else {
         container.w(px(collapsed_width)).into_any_element()
     }
+}
+
+fn minimise_windows() {
+    //TODO
 }
 
 fn set_wallpaper(source: ImageSource) {
@@ -199,6 +211,6 @@ fn main() {
 
         cx.activate(true);
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new("ctrl-q", Quit, None)]);
+        cx.bind_keys([KeyBinding::new("escape", Quit, None)]);
     });
 }
