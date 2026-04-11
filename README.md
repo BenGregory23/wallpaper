@@ -1,5 +1,17 @@
 # wallpaper
 
+Simple application to switch wallpapers in KDE Plasma without going into the settings.
+
+## Examples
+
+![example_1](https://www.github.com/BenGregory23/wallpaper/assets/example_1.png)
+
+
+![example_2](https://www.github.com/BenGregory23/wallpaper/assets/example_2.png)
+
+
+
+## Stack
 Created with Create GPUI App.
 
 - [`gpui`](https://www.gpui.rs/)
@@ -10,3 +22,4 @@ Created with Create GPUI App.
 
 - Ensure Rust is installed - [Rustup](https://rustup.rs/)
 - Run your app with `cargo run`
+- Choose a wallpaper then press escape to close
