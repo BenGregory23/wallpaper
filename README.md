@@ -4,10 +4,10 @@ Simple application to switch wallpapers in KDE Plasma without going into the set
 
 ## Examples
 
-![example_1](https://github.com/BenGregory23/wallpaper/blob/main/example_1.png?raw=true)
+![example_1](https://github.com/BenGregory23/wallpaper/blob/main/assets/example_1.png?raw=true)
 
 
-![example_2](https://github.com/BenGregory23/wallpaper/blob/main/example_2.png?raw=true)
+![example_2](https://github.com/BenGregory23/wallpaper/blob/main/assets/example_2.png?raw=true)
 
 
 
