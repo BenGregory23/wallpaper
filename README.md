@@ -2,6 +2,12 @@
 
 Simple application to switch wallpapers in KDE Plasma without going into the settings.
 
+## Coming next 
+
+- Support for Mac OS
+- Auto compression of new wallpapers
+- Wallpaper selection using keyboard (instead of only mouse click)
+
 ## Examples
 
 ![example_1](https://github.com/BenGregory23/wallpaper/blob/main/assets/example_1.png?raw=true)
