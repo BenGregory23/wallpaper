@@ -1,15 +1,13 @@
 use gpui::*;
-use gpui_component::kbd::Kbd;
 
-use crate::image_compressor::compress_directory;
-use std::path::PathBuf;
-use std::{process::Command, time::Duration, time::Instant};
+use crate::image_compressor::{ compress, convert_path_to_compressed};
+use std::path::{PathBuf};
+use std::{fs, process::Command, time::Duration};
 mod image_compressor;
 
 struct Wallpaper {
     id: i32,
-    default: ImageSource,
-    compressed: ImageSource,
+    default: PathBuf,
 }
 
 pub struct WallpaperModel {
@@ -57,7 +55,7 @@ fn wallpaper_item(
     model: Entity<WallpaperModel>,
 ) -> impl IntoElement {
     let default = wallpaper.default.clone();
-    let compressed = wallpaper.compressed.clone();
+    let compressed = convert_path_to_compressed(PathBuf::from(wallpaper.default.clone()));
     let id = wallpaper.id.clone();
 
     // Widths
@@ -88,7 +86,7 @@ fn wallpaper_item(
             model.update(cx, |state, _cx| {
                 state.selected = Some(id);
             });
-            set_wallpaper(default.clone());
+            set_wallpaper(default.clone().into());
         })
         .child(img(compressed).size_full().object_fit(ObjectFit::Cover))
         .overflow_hidden();
@@ -109,10 +107,6 @@ fn wallpaper_item(
     } else {
         container.w(px(collapsed_width)).into_any_element()
     }
-}
-
-fn minimise_windows() {
-    //TODO
 }
 
 fn set_wallpaper(source: ImageSource) {
@@ -141,7 +135,7 @@ fn load_wallpaper_paths(base_url: &std::path::Path) -> Result<Vec<SharedString>>
     let mut paths = Vec::new();
     let dir_path = std::path::Path::new(&base_url);
 
-    for entry in std::fs::read_dir(dir_path)? {
+    for entry in fs::read_dir(dir_path)? {
         let entry = entry?;
         let file_name = entry.file_name();
 
@@ -156,16 +150,9 @@ fn load_wallpaper_paths(base_url: &std::path::Path) -> Result<Vec<SharedString>>
 actions!(window, [Quit]);
 
 fn main() {
-    let base_directory = "/home/bengregory/Documents/programming/wallpaper/assets/wallpapers/";
+    let base_dir = "/home/bengregory/Documents/programming/wallpaper/assets/wallpapers";
 
-    // compress images if no images compressed
-    let compressed_dir = std::path::Path::new(&base_directory).join("compressed");
-    if !compressed_dir.exists() {
-        let before = Instant::now();
-        let _ = compress_directory(&base_directory);
-        let after = Instant::now();
-        println!("{:?}", after.duration_since(before));
-    }
+    let compressed_dir = compress(base_dir);
 
     Application::new().run(move |cx: &mut App| {
         gpui_component::init(cx);
@@ -190,15 +177,14 @@ fn main() {
                 index = index + 1;
                 Wallpaper {
                     id: index.clone(),
-                    default: PathBuf::from(base_directory).join(&a.as_str()).into(),
-                    compressed: PathBuf::from(&compressed_dir).join(&a.as_str()).into(),
+                    default: PathBuf::from(base_dir).join(&a.as_str()),
                 }
             })
             .collect();
 
         let wallpaper_model = cx.new(|_cx| WallpaperModel {
             sources: wallpapers,
-            selected: Option::None,
+            selected: None,
         });
 
         let _ = cx
@@ -209,6 +195,7 @@ fn main() {
             })
             .expect("Failed to open window");
 
+        // Actions
         cx.activate(true);
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("escape", Quit, None)]);

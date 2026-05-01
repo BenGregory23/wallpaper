@@ -6348,10 +6348,10 @@ dependencies = [
 name = "wallpaper"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "gpui",
  "gpui-component",
  "image",
+ "log",
 ]
 
 [[package]]

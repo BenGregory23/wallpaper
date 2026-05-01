@@ -1,10 +1,12 @@
 use image::open;
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::{Path, PathBuf}, thread};
+use std::collections::HashSet;
+use std::ffi::{OsStr, OsString};
+use std::time::Instant;
 
-pub fn compress_img(directory: &Path, file_name: &Path) {
+
+/** Compression functions **/
+fn compress_img(directory: &Path, file_name: &Path) {
     let width = 500;
     let height = 300;
 
@@ -14,10 +16,6 @@ pub fn compress_img(directory: &Path, file_name: &Path) {
 
     let img = open(&file_path);
     let result = img.expect("File could not be opened");
-
-    // Create compressed folder if needed
-
-    fs::create_dir(directory.join("compressed")).unwrap_or_default();
 
     // Build the image output path
     let mut image_output_path = PathBuf::new();
@@ -33,23 +31,78 @@ pub fn compress_img(directory: &Path, file_name: &Path) {
         .expect("Failed to save image");
 }
 
-pub fn compress_directory(directory: &str) -> io::Result<()> {
+fn compress_directory(directory: &str) -> io::Result<()> {
     let mut entries = fs::read_dir(directory)?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, io::Error>>()?;
 
     entries.sort();
 
-    for entry in entries.iter() {
-        if entry.is_dir() {
-            continue;
-        };
+    let mut compressed_entries = fs::read_dir(format!("{}/{}",directory,"compressed")).unwrap().map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, io::Error>>()?;
 
-        compress_img(
-            Path::new(directory),
-            Path::new(entry.file_name().expect("huh")),
-        );
-    }
+    compressed_entries.sort();
+
+    let compressed_set: HashSet<OsString> = compressed_entries
+        .into_iter()
+        .map(|p| p.file_name().unwrap().to_os_string())
+        .collect();
+
+
+    let entries_to_move = entries.clone();
+
+    let directory_path = PathBuf::from(directory.clone());
+
+
+        for entry in entries_to_move.iter() {
+            if entry.is_dir() || compressed_set.contains(&entry.file_name().unwrap().to_os_string()) {
+                println!("compression:{:?} : file  {:?} already present skipping file", &entry.file_name(), entry);
+                continue;
+            };
+
+
+            let thread_dir = directory_path.clone();
+            let file_name = entry.file_name().unwrap().to_os_string();
+
+
+            thread::spawn(move || {
+                compress_img(
+                    &thread_dir,
+                    Path::new(&file_name)
+                );
+            });
+
+        }
 
     Ok(())
+}
+
+
+/** Helpers **/
+pub fn convert_path_to_compressed(path:PathBuf) -> PathBuf{
+    let mut local = path.clone();
+    let filename =  path.file_name();
+
+    if let  Some(file) = filename {
+        local.pop();
+        local.push("compressed");
+        local.push(file);
+    }
+
+    local
+}
+
+pub fn compress(base_directory: &str) -> PathBuf {
+    // compress images if no images compressed
+    let compressed_dir = std::path::Path::new(&base_directory).join("compressed");
+
+    if !compressed_dir.exists(){
+        // Create compressed folder if needed
+        fs::create_dir(&compressed_dir).unwrap_or_default();
+
+    }
+
+    compress_directory(&base_directory).expect("Error: the directory could not be compressed.");
+
+    compressed_dir
 }
