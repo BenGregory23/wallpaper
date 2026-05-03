@@ -1,6 +1,6 @@
 # wallpaper
 
-Simple application to switch wallpapers in KDE Plasma without going into the settings.
+Simple application to switch wallpapers, currently works only on linux with KDE Plasma.
 
 ## Coming next 
 
