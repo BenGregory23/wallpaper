@@ -4,6 +4,9 @@ Simple application to switch wallpapers, currently works only on linux with KDE 
 
 ## Coming next 
 
+- Adding wallpapers via cli eg: wallpaper -add [filepath/remote url]
+- Interactive loading/logging with the [indicatif library](https://docs.rs/indicatif/latest/indicatif/)
+- Flag to silence logs
 - Support for Mac OS
 - ~~Auto compression of new wallpapers~~
 - Wallpaper selection using keyboard (instead of only mouse click)
