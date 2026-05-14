@@ -151,8 +151,20 @@ actions!(window, [Quit]);
 
 fn main() {
     let base_dir = "/home/bengregory/Documents/programming/wallpaper/assets/wallpapers";
-
     let compressed_dir = compress(base_dir);
+
+    let asset_paths = load_wallpaper_paths(&compressed_dir).unwrap();
+    let mut index = 0;
+    let wallpapers: Vec<Wallpaper> = asset_paths
+        .into_iter()
+        .map(|a| {
+            index = index + 1;
+            Wallpaper {
+                id: index.clone(),
+                default: PathBuf::from(base_dir).join(&a.as_str()),
+            }
+        })
+        .collect();
 
     Application::new().run(move |cx: &mut App| {
         gpui_component::init(cx);
@@ -168,19 +180,6 @@ fn main() {
             window_background: WindowBackgroundAppearance::Transparent,
             ..Default::default()
         };
-
-        let asset_paths = load_wallpaper_paths(&compressed_dir).unwrap();
-        let mut index = 0;
-        let wallpapers: Vec<Wallpaper> = asset_paths
-            .into_iter()
-            .map(|a| {
-                index = index + 1;
-                Wallpaper {
-                    id: index.clone(),
-                    default: PathBuf::from(base_dir).join(&a.as_str()),
-                }
-            })
-            .collect();
 
         let wallpaper_model = cx.new(|_cx| WallpaperModel {
             sources: wallpapers,

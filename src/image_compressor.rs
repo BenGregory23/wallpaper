@@ -2,7 +2,9 @@ use image::open;
 use std::{fs, io, path::{Path, PathBuf}, thread};
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
-use std::time::Instant;
+use std::thread::JoinHandle;
+use std::time::Duration;
+use indicatif::ProgressBar;
 
 
 /** Compression functions **/
@@ -50,30 +52,35 @@ fn compress_directory(directory: &str) -> io::Result<()> {
 
 
     let entries_to_move = entries.clone();
+    let directory_path = PathBuf::from(directory);
+    let bar = ProgressBar::new(entries.len() as u64);
+    let mut thread_handles : Vec<JoinHandle<()>>  = Vec::new();
 
-    let directory_path = PathBuf::from(directory.clone());
+    for entry in entries_to_move.iter() {
+        if entry.is_dir() || compressed_set.contains(&entry.file_name().unwrap().to_os_string()) {
+            //println!("compression:{:?} : file  {:?} already present skipping file", &entry.file_name(), entry);
+            continue;
+        };
 
+        let thread_dir = directory_path.clone();
+        let file_name = entry.file_name().unwrap().to_os_string();
+        let thread_bar = bar.clone();
 
-        for entry in entries_to_move.iter() {
-            if entry.is_dir() || compressed_set.contains(&entry.file_name().unwrap().to_os_string()) {
-                println!("compression:{:?} : file  {:?} already present skipping file", &entry.file_name(), entry);
-                continue;
-            };
+        let thread = thread::spawn(move || {
+            compress_img(
+                &thread_dir,
+                Path::new(&file_name)
+            );
+            thread_bar.inc(1);
+        });
 
+        thread_handles.push(thread);
+    }
 
-            let thread_dir = directory_path.clone();
-            let file_name = entry.file_name().unwrap().to_os_string();
-
-
-            thread::spawn(move || {
-                compress_img(
-                    &thread_dir,
-                    Path::new(&file_name)
-                );
-            });
-
-        }
-
+    for handle in thread_handles {
+        handle.join().unwrap();
+    }
+    bar.finish_and_clear();
     Ok(())
 }
 

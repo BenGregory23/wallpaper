@@ -8,6 +8,7 @@ gpui = "0.2.2"
 gpui-component = "0.5.1"
 image = "0.25.10"
 log = "0.4.29"
+indicatif = "0.18.4"
 
 # smallvec is included here for convenience, it is used by gpui when creating
 # components that can have children. uncomment this line or
